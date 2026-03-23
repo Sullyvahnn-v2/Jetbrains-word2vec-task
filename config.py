@@ -1,13 +1,6 @@
-"""
-word2vec_numpy/config.py
-------------------------
-Central configuration object.  Every tuneable knob lives here so that
-experiments are fully reproducible and the rest of the codebase stays clean.
-"""
-
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 
@@ -17,15 +10,14 @@ class Word2VecConfig:
     # Architecture
     # ------------------------------------------------------------------
     embed_dim: int = 300
-    """Dimensionality of the word embedding vectors."""
+    """Dimensionality of the embedding vectors."""
 
     model: Literal["skipgram", "cbow"] = "skipgram"
-    """Training architecture.  Only 'skipgram' is implemented; 'cbow' is
-    reserved for future expansion."""
+    """Training architecture."""
 
     loss: Literal["negative_sampling", "hs"] = "negative_sampling"
     """Output approximation.  Only 'negative_sampling' is implemented;
-    'hs' (hierarchical softmax) is reserved for future expansion."""
+    'hs'"""
 
     # ------------------------------------------------------------------
     # Corpus pre-processing
@@ -35,20 +27,19 @@ class Word2VecConfig:
 
     subsample_t: float = 1e-3
     """Frequent-word subsampling threshold (set to 0.0 to disable).
-    Words with frequency f are discarded with probability
-    P = 1 - sqrt(t / f).  Recommended: 1e-3 to 1e-5."""
+     Recommended: 1e-3 to 1e-5."""
 
     # ------------------------------------------------------------------
     # Training
     # ------------------------------------------------------------------
     window: int = 5
-    """Maximum context half-window size (tokens on each side of center)."""
+    """Maximum context half-window size"""
 
     dynamic_window: bool = True
     """If True, sample the actual window size uniformly from [1, window]
-    on every center word (matches original word2vec behaviour)."""
+    on every center word"""
 
-    negative: int = 5
+    negative: int = 15
     """Number of negative samples drawn per positive (center, context) pair."""
 
     epochs: int = 5
@@ -67,8 +58,7 @@ class Word2VecConfig:
     # Negative-sampling noise distribution
     # ------------------------------------------------------------------
     ns_exponent: float = 0.75
-    """Unigram distribution exponent.  Negative samples are drawn from
-    P(w) ∝ f(w)^ns_exponent.  Value of 0.75 from the original paper."""
+    """Unigram distribution exponent. Value of 0.75 from the original paper."""
 
     table_size: int = 100_000_00
     """Size of the unigram look-up table used for negative sampling."""

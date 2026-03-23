@@ -1,14 +1,13 @@
 """
 word2vec_numpy/utils.py
 ------------------------
-Lightweight utilities shared across the library:
+Utilities shared across the library:
 
   * sigmoid()             — fast look-up-table sigmoid (avoids np.exp in
                             the inner training loop)
   * LinearDecaySchedule   — linear learning-rate schedule
   * cosine_similarity()   — L2-normalised dot product
   * most_similar()        — nearest-neighbour word lookup
-  * analogy()             — analogy evaluation (b - a + c ≈ ?)
 """
 
 from __future__ import annotations
@@ -17,15 +16,12 @@ import numpy as np
 
 
 # -----------------------------------------------------------------------
-# Fast sigmoid via pre-computed look-up table
+#Sigmoid via pre-computed look-up table
 # -----------------------------------------------------------------------
 
 class _SigmoidTable:
     """
     Approximates σ(x) = 1 / (1 + exp(-x)) using a pre-computed table.
-
-    Mirrors the ``expTable`` in the original C word2vec implementation.
-    Values outside [-max_val, +max_val] are clamped to 0 or 1 respectively.
     """
 
     def __init__(self, table_size: int = 1_000, max_val: float = 6.0) -> None:
@@ -51,10 +47,7 @@ class _SigmoidTable:
         # Map x ∈ [-max, +max] → table index ∈ [0, table_size-1]
         idx = ((x + self.max_val) / (2.0 * self.max_val) * self.table_size).astype(np.int32)
         idx = np.clip(idx, 0, self.table_size - 1)
-        
-        # In C word2vec:
-        # if (f > MAX_EXP) g = (label - 1) * alpha;  -> sigmoid=1.0
-        # else if (f < -MAX_EXP) g = (label - 0) * alpha; -> sigmoid=0.0
+
         result = self._table[idx]
         result = np.where(x > self.max_val, 1.0, result)
         result = np.where(x < -self.max_val, 0.0, result)
@@ -62,49 +55,16 @@ class _SigmoidTable:
         return result.astype(np.float32)
 
 
-# Module-level default table (matches default config values)
 _default_table = _SigmoidTable()
-
-
-def sigmoid(
-    x: float | np.ndarray,
-    table: _SigmoidTable | None = None,
-) -> np.ndarray:
-    """
-    Fast sigmoid approximation via a pre-computed look-up table.
-
-    Parameters
-    ----------
-    x:
-        Scalar or array of input values.
-    table:
-        Optional custom ``_SigmoidTable`` (uses library default if None).
-
-    Returns
-    -------
-    np.ndarray of float32.
-    """
-    t = table if table is not None else _default_table
-    return t(x)
-
 
 def make_sigmoid_table(table_size: int, max_val: float) -> _SigmoidTable:
     """Create a sigmoid table with custom resolution and range."""
     return _SigmoidTable(table_size=table_size, max_val=max_val)
 
-
-# -----------------------------------------------------------------------
-# Learning-rate schedule
-# -----------------------------------------------------------------------
-
 class LinearDecaySchedule:
     """
     Linearly decays the learning rate from ``lr0`` down to ``min_lr``
     over ``total_steps`` gradient steps.
-
-    lr(step) = max(lr0 * (1 - step / total_steps), min_lr)
-
-    Matches the alpha decay in the original C word2vec implementation.
     """
 
     def __init__(self, lr0: float, min_lr: float, total_steps: int) -> None:
@@ -118,11 +78,6 @@ class LinearDecaySchedule:
         """Return the learning rate at ``step``."""
         progress = min(step / self.total_steps, 1.0)
         return max(self.lr0 * (1.0 - progress), self.min_lr)
-
-
-# -----------------------------------------------------------------------
-# Evaluation helpers
-# -----------------------------------------------------------------------
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     """

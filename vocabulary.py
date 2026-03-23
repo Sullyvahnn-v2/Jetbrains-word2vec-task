@@ -7,7 +7,6 @@ for negative sampling.
 
 from __future__ import annotations
 
-import math
 from collections import Counter
 from typing import Iterable
 
@@ -17,7 +16,7 @@ from .config import Word2VecConfig
 
 
 class Vocabulary:
-    """Maps words ↔ integer indices and encapsulates all corpus statistics."""
+    """Maps words to integer indices and encapsulates all corpus statistics."""
 
     # Special token placed at index 0; acts as a sentinel / padding value.
     UNKNOWN = "<unk>"
@@ -25,16 +24,11 @@ class Vocabulary:
     def __init__(self, config: Word2VecConfig) -> None:
         self.config = config
 
-        # Populated by build()
         self.word2idx: dict[str, int] = {}
         self.idx2word: list[str] = []
         self.counts: np.ndarray = np.array([], dtype=np.int64)  # shape (V,)
         self._keep_probs: np.ndarray = np.array([], dtype=np.float32)
         self._unigram_table: np.ndarray = np.array([], dtype=np.int32)
-
-    # ------------------------------------------------------------------
-    # Public properties
-    # ------------------------------------------------------------------
 
     @property
     def vocab_size(self) -> int:
@@ -44,10 +38,6 @@ class Vocabulary:
     def total_tokens(self) -> int:
         return int(self.counts.sum())
 
-    # ------------------------------------------------------------------
-    # Construction
-    # ------------------------------------------------------------------
-
     def build(self, sentences: Iterable[list[str]]) -> "Vocabulary":
         """
         Build the vocabulary from an iterable of tokenised sentences.
@@ -56,7 +46,7 @@ class Vocabulary:
         -----
         1. Count all word occurrences.
         2. Drop words that appear fewer than ``min_count`` times.
-        3. Sort by descending frequency (matches C implementation).
+        3. Sort by descending frequency.
         4. Assign integer indices.
         5. Pre-compute subsampling discard probabilities.
         6. Build the unigram noise table.
@@ -74,7 +64,6 @@ class Vocabulary:
         for sentence in sentences:
             counter.update(sentence)
 
-        # Filter by min_count and sort by descending frequency
         filtered = [
             (w, c) for w, c in counter.items()
             if c >= self.config.min_count
@@ -89,22 +78,10 @@ class Vocabulary:
         self._build_unigram_table()
         return self
 
-    # ------------------------------------------------------------------
-    # Subsampling
-    # ------------------------------------------------------------------
-
     def _compute_keep_probs(self) -> None:
         """
         Pre-compute per-word *keep* probability for frequent-word
         subsampling (Mikolov et al. 2013, §2.3).
-
-        The full formula from the paper is:
-
-            P_keep(w) = sqrt(t / f(w)) + (t / f(w))
-
-        where f(w) is the relative frequency of word w and t is the
-        subsampling threshold (config.subsample_t).  Rare words are
-        always kept (probability clamped to 1.0).
         """
         if self.config.subsample_t <= 0.0:
             self._keep_probs = np.ones(self.vocab_size, dtype=np.float32)
@@ -121,17 +98,10 @@ class Vocabulary:
         """Return the probability of *keeping* word ``idx`` during training."""
         return float(self._keep_probs[idx])
 
-    # ------------------------------------------------------------------
-    # Unigram noise table for negative sampling
-    # ------------------------------------------------------------------
-
     def _build_unigram_table(self) -> None:
         """
         Build a large integer table where each word w occupies a number
         of slots proportional to f(w)^ns_exponent.
-
-        Sampling a negative word = picking a random index in this table.
-        Replicates InitUnigramTable() from word2vec.c.
         """
         exponent = self.config.ns_exponent
         powered = np.power(self.counts.astype(np.float64), exponent)
@@ -188,10 +158,6 @@ class Vocabulary:
 
         return samples
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-
     def __len__(self) -> int:
         return self.vocab_size
 
@@ -204,3 +170,7 @@ class Vocabulary:
     def encode(self, tokens: list[str]) -> list[int]:
         """Convert a list of tokens to a list of word indices, skipping OOV."""
         return [self.word2idx[t] for t in tokens if t in self.word2idx]
+
+    @property
+    def keep_probs(self):
+        return self._keep_probs

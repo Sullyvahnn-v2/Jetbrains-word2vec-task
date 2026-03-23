@@ -1,8 +1,8 @@
 """
 word2vec_numpy/model.py
 ------------------------
-High-level Word2Vec model: owns the embedding matrices, drives the
-training loop, and exposes a clean public API.
+Word2Vec model: owns the embedding matrices, drives the
+training loop, and exposes a public API.
 """
 
 from __future__ import annotations
@@ -10,16 +10,23 @@ from __future__ import annotations
 import time
 
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 
 from .config import Word2VecConfig
-from .data import Corpus, sentences_from_file, sentences_from_list
+from .data import sentences_from_file, sentences_from_list
 from .trainers.base import BaseTrainer
 from .trainers.skipgram_ns import SkipGramNegativeSampling
 from .utils import most_similar, LinearDecaySchedule
 from .vocabulary import Vocabulary
+
+
+def _make_sentence_fn(source: str | Path | list[list[str]]):
+    """Return a zero-argument callable that yields sentences."""
+    if isinstance(source, (str, Path)):
+        return lambda: sentences_from_file(source)
+    else:
+        return lambda: sentences_from_list(source)
 
 
 class Word2Vec:
@@ -39,7 +46,6 @@ class Word2Vec:
     >>> model.train("path/to/corpus.txt")
     >>> vec = model["king"]                      # numpy array
     >>> model.most_similar("king", n=5)          # [(word, score), ...]
-    >>> model.analogy("man", "king", "woman")    # [("queen", score), ...]
     >>> model.save("model.npz")
     """
 
@@ -49,10 +55,6 @@ class Word2Vec:
         self.W: np.ndarray | None = None    # input embeddings  (syn0)
         self.W_: np.ndarray | None = None   # output embeddings (syn1neg)
         self._rng = np.random.default_rng(self.config.seed)
-
-    # ------------------------------------------------------------------
-    # Training
-    # ------------------------------------------------------------------
 
     def train(
         self,
@@ -79,7 +81,7 @@ class Word2Vec:
         self  (for method chaining)
         """
         cfg = self.config
-        sentences_fn = self._make_sentence_fn(source)
+        sentences_fn = _make_sentence_fn(source)
 
         # ----------------------------------------------------------
         # Phase 1: Build vocabulary
@@ -101,7 +103,7 @@ class Word2Vec:
         # Phase 2: Initialise embedding matrices
         # ----------------------------------------------------------
         V, D = self.vocab.vocab_size, cfg.embed_dim
-        # Uniform initialisation in [-0.5/D, 0.5/D] (matches C word2vec)
+        # Uniform initialisation in [-0.5/D, 0.5/D]
         self.W = self._rng.uniform(-0.5 / D, 0.5 / D, (V, D)).astype(np.float32)
         self.W_ = np.zeros((V, D), dtype=np.float32)
 
@@ -113,7 +115,6 @@ class Word2Vec:
         # ----------------------------------------------------------
         # Phase 4: Training loop
         # ----------------------------------------------------------
-        corpus = Corpus(self.vocab, cfg, self._rng)
         total_tokens = self.vocab.total_tokens
         total_steps = total_tokens * cfg.epochs
         schedule = LinearDecaySchedule(cfg.learning_rate, cfg.min_lr, total_steps)
@@ -197,10 +198,6 @@ class Word2Vec:
 
         return self
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
     def __getitem__(self, word: str) -> np.ndarray:
         """Return the embedding vector for ``word``."""
         self._check_trained()
@@ -212,30 +209,6 @@ class Word2Vec:
         """Return the ``n`` most similar words by cosine similarity."""
         self._check_trained()
         return most_similar(word, self.W, self.vocab.word2idx, self.vocab.idx2word, n)
-
-    # def analogy(
-    #     self,
-    #     word_a: str,
-    #     word_b: str,
-    #     word_c: str,
-    #     n: int = 5,
-    # ) -> list[tuple[str, float]]:
-    #     """
-    #     Evaluate the analogy ``word_b - word_a + word_c ≈ ?``.
-    #
-    #     Example: ``model.analogy("man", "king", "woman")`` should return
-    #     something like ``[("queen", 0.72), …]``.
-    #     """
-    #     self._check_trained()
-    #     return analogy(
-    #         word_a, word_b, word_c,
-    #         self.W, self.vocab.word2idx, self.vocab.idx2word,
-    #         n,
-    #     )
-
-    # ------------------------------------------------------------------
-    # Persistence
-    # ------------------------------------------------------------------
 
     def save(self, path: str | Path) -> None:
         """
@@ -290,20 +263,9 @@ class Word2Vec:
 
         return model
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
     def _check_trained(self) -> None:
         if self.W is None or self.vocab is None:
             raise RuntimeError("Model has not been trained yet.  Call train() first.")
-
-    def _make_sentence_fn(self, source: str | Path | list[list[str]]):
-        """Return a zero-argument callable that yields sentences."""
-        if isinstance(source, (str, Path)):
-            return lambda: sentences_from_file(source)
-        else:
-            return lambda: sentences_from_list(source)
 
     def _build_trainer(self) -> BaseTrainer:
         cfg = self.config
