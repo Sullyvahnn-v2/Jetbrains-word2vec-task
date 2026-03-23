@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..config import Word2VecConfig
+from word2vec_numpy.word2vec_numpy.config import Word2VecConfig
 from ..vocabulary import Vocabulary
 from ..utils import make_sigmoid_table
 from .base import BaseTrainer
@@ -55,7 +55,7 @@ class CBOWNegativeSampling(BaseTrainer):
         # Loss
         pos_loss = -np.log(pos_score + 1e-7)
         neg_loss = -np.log(1.0 - neg_scores + 1e-7).sum()
-        total_loss = float(pos_loss + neg_loss) / (len(neg_scores)+1)
+        total_loss = float(pos_loss + neg_loss)
 
         # Gradients
         err_pos = pos_score - 1.0  # label=1

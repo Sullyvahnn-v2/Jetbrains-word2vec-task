@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 
-from ..config import Word2VecConfig
+from word2vec_numpy.word2vec_numpy.config import Word2VecConfig
 from ..vocabulary import Vocabulary
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..config import Word2VecConfig
+from word2vec_numpy.word2vec_numpy.config import Word2VecConfig
 from ..vocabulary import Vocabulary
 from ..utils import make_sigmoid_table
 from .base import BaseTrainer

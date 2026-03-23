@@ -12,7 +12,7 @@ from typing import Iterable
 
 import numpy as np
 
-from .config import Word2VecConfig
+from word2vec_numpy.word2vec_numpy.config import Word2VecConfig
 
 
 class Vocabulary:
@@ -61,8 +61,12 @@ class Vocabulary:
         self  (for method chaining)
         """
         counter: Counter[str] = Counter()
+        raw_total = 0
         for sentence in sentences:
             counter.update(sentence)
+            raw_total += len(sentence)
+            
+        self.raw_total_tokens = raw_total
 
         filtered = [
             (w, c) for w, c in counter.items()
@@ -75,7 +79,8 @@ class Vocabulary:
         self.counts = np.array([c for _, c in filtered], dtype=np.int64)
 
         self._compute_keep_probs()
-        self._build_unigram_table()
+        if self.config.loss == "negative_sampling":
+            self._build_unigram_table()
         if self.config.loss == "hs":
             self._build_huffman_tree()
         return self

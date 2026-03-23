@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..config import Word2VecConfig
+from word2vec_numpy.word2vec_numpy.config import Word2VecConfig
 from ..vocabulary import Vocabulary
 from ..utils import make_sigmoid_table
 from .base import BaseTrainer
@@ -69,4 +69,4 @@ class CBOWHierarchicalSoftmax(BaseTrainer):
         # to strictly mirror C Word2Vec gradient schedules).
         np.add.at(self.W, contexts, -lr * neu1e)
 
-        return total_loss/len(scores)
+        return total_loss

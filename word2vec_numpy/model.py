@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .config import Word2VecConfig
+from word2vec_numpy.word2vec_numpy.config import Word2VecConfig
 from .data import sentences_from_file, sentences_from_list
 from .trainers.base import BaseTrainer
 from .utils import most_similar, LinearDecaySchedule
@@ -127,7 +127,7 @@ class Word2Vec:
         # ----------------------------------------------------------
         # Phase 4: Training loop
         # ----------------------------------------------------------
-        total_tokens = self.vocab.total_tokens
+        total_tokens = getattr(self.vocab, "raw_total_tokens", self.vocab.total_tokens)
         total_steps = total_tokens * cfg.epochs
         schedule = LinearDecaySchedule(cfg.learning_rate, cfg.min_lr, total_steps)
 
@@ -194,7 +194,7 @@ class Word2Vec:
                         f"step {global_pairs:,}  "
                         f"lr {lr:.5f}  "
                         f"loss {avg:.4f}  "
-                        f"progress {progress:.1f}%  "
+                        f"progress {min(progress, 100.0):.1f}%  "
                         f"{wps:,.0f} pairs/s"
                     )
                     interval_loss = 0.0
@@ -252,6 +252,7 @@ class Word2Vec:
             W_=self.W_,
             idx2word=np.array(self.vocab.idx2word),
             counts=self.vocab.counts,
+            raw_total_tokens=np.array(getattr(self.vocab, "raw_total_tokens", self.vocab.total_tokens), dtype=np.int64)
         )
         print(f"Model saved to {path}.npz")
 
@@ -285,8 +286,12 @@ class Word2Vec:
         vocab.idx2word = idx2word
         vocab.word2idx = {w: i for i, w in enumerate(idx2word)}
         vocab.counts = counts
+        vocab.raw_total_tokens = int(data.get("raw_total_tokens", int(counts.sum())))
         vocab._compute_keep_probs()
-        vocab._build_unigram_table()
+        if cfg.loss == "negative_sampling":
+            vocab._build_unigram_table()
+        if cfg.loss == "hs":
+            vocab._build_huffman_tree()
         model.vocab = vocab
 
         return model
