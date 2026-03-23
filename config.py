@@ -96,7 +96,3 @@ class Word2VecConfig:
             raise ValueError(f"Unknown model '{self.model}'. Choose 'skipgram' or 'cbow'.")
         if self.loss not in ("negative_sampling", "hs"):
             raise ValueError(f"Unknown loss '{self.loss}'. Choose 'negative_sampling' or 'hs'.")
-        if self.model == "cbow":
-            raise NotImplementedError("CBOW is not yet implemented.")
-        if self.loss == "hs":
-            raise NotImplementedError("Hierarchical softmax is not yet implemented.")

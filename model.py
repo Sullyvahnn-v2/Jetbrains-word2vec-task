@@ -16,7 +16,6 @@ import numpy as np
 from .config import Word2VecConfig
 from .data import sentences_from_file, sentences_from_list
 from .trainers.base import BaseTrainer
-from .trainers.skipgram_ns import SkipGramNegativeSampling
 from .utils import most_similar, LinearDecaySchedule
 from .vocabulary import Vocabulary
 
@@ -62,6 +61,8 @@ class Word2Vec:
         *,
         verbose: bool = True,
         log_every: int = 10_000,
+        resume: bool = False,
+        save_epoch_path: str | Path | None = None,
     ) -> "Word2Vec":
         """
         Train the model on a corpus.
@@ -75,6 +76,12 @@ class Word2Vec:
             Print progress (loss and words/sec) during training.
         log_every:
             Print a log line after this many training pairs.
+        resume:
+            If True, skip vocabulary building and weight initialisation,
+            and continue training existing weights.
+        save_epoch_path:
+            If provided, save a checkpoint after every epoch to this base path
+            (e.g., passing 'model.npz' saves 'model_epoch_1.npz').
 
         Returns
         -------
@@ -83,29 +90,34 @@ class Word2Vec:
         cfg = self.config
         sentences_fn = _make_sentence_fn(source)
 
-        # ----------------------------------------------------------
-        # Phase 1: Build vocabulary
-        # ----------------------------------------------------------
-        if verbose:
-            print("Building vocabulary …")
-        t0 = time.perf_counter()
-        self.vocab = Vocabulary(cfg).build(sentences_fn())
-        if verbose:
-            elapsed = time.perf_counter() - t0
-            print(
-                f"  Vocab size : {self.vocab.vocab_size:,} words "
-                f"(min_count={cfg.min_count})"
-            )
-            print(f"  Total tokens : {self.vocab.total_tokens:,}")
-            print(f"  Built in {elapsed:.1f}s")
+        if not resume:
+            # ----------------------------------------------------------
+            # Phase 1: Build vocabulary
+            # ----------------------------------------------------------
+            if verbose:
+                print("Building vocabulary …")
+            t0 = time.perf_counter()
+            self.vocab = Vocabulary(cfg).build(sentences_fn())
+            if verbose:
+                elapsed = time.perf_counter() - t0
+                print(
+                    f"  Vocab size : {self.vocab.vocab_size:,} words "
+                    f"(min_count={cfg.min_count})"
+                )
+                print(f"  Total tokens : {self.vocab.total_tokens:,}")
+                print(f"  Built in {elapsed:.1f}s")
 
-        # ----------------------------------------------------------
-        # Phase 2: Initialise embedding matrices
-        # ----------------------------------------------------------
-        V, D = self.vocab.vocab_size, cfg.embed_dim
-        # Uniform initialisation in [-0.5/D, 0.5/D]
-        self.W = self._rng.uniform(-0.5 / D, 0.5 / D, (V, D)).astype(np.float32)
-        self.W_ = np.zeros((V, D), dtype=np.float32)
+            # ----------------------------------------------------------
+            # Phase 2: Initialise embedding matrices
+            # ----------------------------------------------------------
+            V, D = self.vocab.vocab_size, cfg.embed_dim
+            # Uniform initialisation in [-0.5/D, 0.5/D]
+            self.W = self._rng.uniform(-0.5 / D, 0.5 / D, (V, D)).astype(np.float32)
+            self.W_ = np.zeros((V, D), dtype=np.float32)
+        else:
+            self._check_trained()
+            if verbose:
+                print(f"Resuming training with existing {self.vocab.vocab_size:,} words vocabulary...")
 
         # ----------------------------------------------------------
         # Phase 3: Build trainer
@@ -192,6 +204,22 @@ class Word2Vec:
                 avg_loss = epoch_loss / max(pair_count, 1)
                 print(f"Epoch {epoch}/{cfg.epochs} done — avg loss {avg_loss:.4f}")
 
+            if save_epoch_path:
+                ep_path = Path(save_epoch_path)
+                # Ensure the directory exists
+                ep_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                # Format: model_epoch_1.npz
+                suffix = ep_path.suffix if ep_path.suffix else ".npz"
+                stem = ep_path.stem
+                if stem.endswith(".npz"):
+                    stem = stem[:-4]
+                    
+                epoch_file = ep_path.with_name(f"{stem}_epoch_{epoch}{suffix}")
+                if verbose:
+                    print(f"Saving epoch checkpoint to {epoch_file}...")
+                self.save(epoch_file)
+
         if verbose:
             total_time = time.perf_counter() - t_start
             print(f"Training complete in {total_time:.1f}s")
@@ -270,9 +298,21 @@ class Word2Vec:
     def _build_trainer(self) -> BaseTrainer:
         cfg = self.config
         if cfg.model == "skipgram" and cfg.loss == "negative_sampling":
-            return SkipGramNegativeSampling(
-                self.W, self.W_, self.vocab, cfg, self._rng
-            )
+            from .trainers.skipgram_ns import SkipGramNegativeSampling
+            return SkipGramNegativeSampling(self.W, self.W_, self.vocab, cfg, self._rng)
+            
+        elif cfg.model == "skipgram" and cfg.loss == "hs":
+            from .trainers.skipgram_hs import SkipGramHierarchicalSoftmax
+            return SkipGramHierarchicalSoftmax(self.W, self.W_, self.vocab, cfg, self._rng)
+            
+        elif cfg.model == "cbow" and cfg.loss == "negative_sampling":
+            from .trainers.cbow_ns import CBOWNegativeSampling
+            return CBOWNegativeSampling(self.W, self.W_, self.vocab, cfg, self._rng)
+            
+        elif cfg.model == "cbow" and cfg.loss == "hs":
+            from .trainers.cbow_hs import CBOWHierarchicalSoftmax
+            return CBOWHierarchicalSoftmax(self.W, self.W_, self.vocab, cfg, self._rng)
+            
         raise NotImplementedError(
             f"Trainer for model='{cfg.model}', loss='{cfg.loss}' is not yet implemented."
         )

@@ -76,7 +76,69 @@ class Vocabulary:
 
         self._compute_keep_probs()
         self._build_unigram_table()
+        if self.config.loss == "hs":
+            self._build_huffman_tree()
         return self
+
+    def _build_huffman_tree(self) -> None:
+        """
+        Build the Huffman binary tree for Hierarchical Softmax.
+        """
+        V = self.vocab_size
+        if V == 0:
+            return
+
+        count = np.zeros(V * 2 + 1, dtype=np.int64)
+        binary = np.zeros(V * 2 + 1, dtype=np.int8)
+        parent_node = np.zeros(V * 2 + 1, dtype=np.int32)
+
+        count[:V] = self.counts
+        count[V:] = int(1e15)
+
+        pos1 = V - 1
+        pos2 = V
+
+        for a in range(V - 1):
+            if pos1 >= 0:
+                if count[pos1] < count[pos2]:
+                    min1i = pos1
+                    pos1 -= 1
+                else:
+                    min1i = pos2
+                    pos2 += 1
+            else:
+                min1i = pos2
+                pos2 += 1
+
+            if pos1 >= 0:
+                if count[pos1] < count[pos2]:
+                    min2i = pos1
+                    pos1 -= 1
+                else:
+                    min2i = pos2
+                    pos2 += 1
+            else:
+                min2i = pos2
+                pos2 += 1
+
+            count[V + a] = count[min1i] + count[min2i]
+            parent_node[min1i] = V + a
+            parent_node[min2i] = V + a
+            binary[min2i] = 1
+
+        self.point = []
+        self.code = []
+
+        for a in range(V):
+            path = []
+            code = []
+            b = a
+            while b != V * 2 - 2:
+                code.append(binary[b])
+                path.append(parent_node[b] - V) # Map internal nodes to [0, V-2]
+                b = parent_node[b]
+            self.point.append(np.array(path[::-1], dtype=np.int32))
+            self.code.append(np.array(code[::-1], dtype=np.int8))
 
     def _compute_keep_probs(self) -> None:
         """
