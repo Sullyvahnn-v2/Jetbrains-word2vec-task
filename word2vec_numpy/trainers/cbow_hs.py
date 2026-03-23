@@ -58,15 +58,13 @@ class CBOWHierarchicalSoftmax(BaseTrainer):
 
         err = scores - labels
 
-        # Accumulated error for the hidden layer `h` (neu1e in word2vec.c)
         neu1e = np.dot(err, U_path)
 
         # Update output nodes W_
         grad_U_path = err[:, None] * h[None, :]
         np.add.at(self.W_, points, -lr * grad_U_path)
 
-        # Update input contexts W (directly propagating neu1e without cw division
-        # to strictly mirror C Word2Vec gradient schedules).
+        # Update input contexts W
         np.add.at(self.W, contexts, -lr * neu1e)
 
         return total_loss

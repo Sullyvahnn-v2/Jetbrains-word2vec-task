@@ -61,8 +61,7 @@ class CBOWNegativeSampling(BaseTrainer):
         err_pos = pos_score - 1.0  # label=1
         err_neg = neg_scores       # label=0
 
-        # Accumulated error for the hidden layer `h` (neu1e in word2vec.c)
-        # Note: word2vec.c calculates neu1e = g * syn1neg
+        # Accumulated error for the hidden layer `h`
         neu1e = err_pos * u_o + (err_neg[:, None] * U_neg).sum(axis=0)
 
         # Update output matrix W_
@@ -71,11 +70,6 @@ class CBOWNegativeSampling(BaseTrainer):
         np.add.at(self.W_, negatives, -lr * grad_U_neg)
 
         # Update input matrix W
-        # word2vec.c propagates neu1e directly to all context words WITHOUT dividing by cw!
-        # syn0[c + l1] += neu1e[c]
-        # In our notation: W[ctx] -= lr * backprop_err (since neu1e is negative gradient)
-        # Wait: err_pos is pos_score - 1 (which is NEGATIVE error for gradient descent).
-        # We subtract lr * neu1e, which matches syn0 += \alpha * (label - f) * syn1neg
         np.add.at(self.W, contexts, -lr * neu1e)
 
         return total_loss

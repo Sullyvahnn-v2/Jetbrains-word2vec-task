@@ -49,7 +49,6 @@ class SkipGramHierarchicalSoftmax(BaseTrainer):
             dots = U_path @ v_c
             scores = self._sigmoid(dots)
 
-            # In word2vec.c, the target label at each tree node is (1 - code).
             # So if code is 0, the target label is 1 (take left branch).
             # If code is 1, the target label is 0 (take right branch).
             labels = 1 - codes
